@@ -66,7 +66,8 @@ textarea{min-height:92px;resize:vertical}
 label.chk{display:flex;gap:8px;align-items:center;cursor:pointer}
 label.chk input{width:17px;height:17px;accent-color:var(--red)}
 
-.seg{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.seg{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+@media(max-width:760px){.seg{grid-template-columns:1fr}}
 .seg label{border:2px solid var(--line);border-radius:12px;padding:14px 16px;cursor:pointer;display:flex;gap:12px;align-items:center;background:#fff}
 .seg input{display:none}
 .seg label:has(input:checked){border-color:var(--red);background:#fff5f6}
@@ -104,6 +105,7 @@ label.chk input{width:17px;height:17px;accent-color:var(--red)}
 .s-cancel{background:#f3f4f6;color:#6b7280}
 .c-medical{background:#fde8ec;color:#9d0c24}
 .c-it{background:#dbeafe;color:#1e40af}
+.c-building{background:#ccfbf1;color:#115e59}
 
 /* ---------- stepper ---------- */
 .steps{display:flex;gap:0;margin:6px 0 4px}
@@ -219,7 +221,8 @@ const STATUS = {
 const STEPS = ['open','checking','repairing','waiting_parts','done'];
 const CATEGORY = {
   medical:{label:'อุปกรณ์การแพทย์', cls:'c-medical', ico:'🩺'},
-  it:     {label:'อุปกรณ์ IT',       cls:'c-it',      ico:'💻'}
+  it:     {label:'อุปกรณ์ IT',       cls:'c-it',      ico:'💻'},
+  building:{label:'อาคาร',            cls:'c-building', ico:'🏢'}
 };
 const CAUSES  = ['อายุการใช้งานของเครื่องมือ','การใช้งานต่อเนื่องเป็นเวลานาน','เครื่องมือเสื่อมสภาพ','การตกกระแทก','การทำความสะอาด / Sterile ไม่ถูกวิธี','การใช้งานผิดประเภท'];
 const IMPACTS = ['ไม่มีผลกระทบต่อการรักษา','ต้องหยุดใช้งานเครื่องมือทันที','ต้องเลื่อน / เปลี่ยนแผนการรักษา'];
@@ -408,6 +411,7 @@ function viewNew(){
       <div class="seg">
         <label><input type="radio" name="category" value="medical" checked><span class="ico">🩺</span><div><b>อุปกรณ์การแพทย์</b><span class="d">เครื่องมือ / อุปกรณ์ทางการแพทย์</span></div></label>
         <label><input type="radio" name="category" value="it"><span class="ico">💻</span><div><b>อุปกรณ์ IT</b><span class="d">คอมพิวเตอร์ ปริ้นเตอร์ เครือข่าย ฯลฯ</span></div></label>
+        <label><input type="radio" name="category" value="building"><span class="ico">🏢</span><div><b>อาคาร</b><span class="d">ระบบไฟ ประปา แอร์ ประตู ผนัง ฯลฯ</span></div></label>
       </div></div>
 
     <div class="card"><h3>ข้อมูลผู้แจ้ง</h3><div class="grid g3">
@@ -418,7 +422,7 @@ function viewNew(){
     </div></div>
 
     <div class="card"><h3>1. รายละเอียดเครื่องมือ</h3><div class="grid">
-      <label class="f">ชื่อเครื่องมือ <span class="req">*</span><input type="text" name="equipment_name" required></label>
+      <label class="f"><span id="eqLbl">ชื่อเครื่องมือ</span> <span class="req">*</span><input type="text" name="equipment_name" required></label>
       <label class="f">ยี่ห้อ / รุ่น<input type="text" name="brand_model"></label>
       <label class="f">รหัสเครื่องมือ / Serial No.<input type="text" name="serial_no"></label>
       <label class="f">อายุการใช้งานโดยประมาณ<input type="text" name="age_estimate" placeholder="เช่น 3 ปี"></label>
@@ -457,7 +461,14 @@ function viewNew(){
   </form>`;
 
   const cat = ()=>$('input[name=category]:checked').value;
-  const setPh = ()=>{ $('input[name=equipment_name]').placeholder = cat()==='it'?'เช่น คอมพิวเตอร์ตั้งโต๊ะ, เครื่องปริ้นเตอร์':'เช่น Handpiece, Ultrasonic scaler'; };
+  const setPh = ()=>{
+    const c = cat();
+    $('#eqLbl').textContent = c==='building' ? 'รายการ / จุดที่ซ่อม' : 'ชื่อเครื่องมือ';
+    $('input[name=equipment_name]').placeholder =
+      c==='it' ? 'เช่น คอมพิวเตอร์ตั้งโต๊ะ, เครื่องปริ้นเตอร์' :
+      c==='building' ? 'เช่น แอร์ห้องตรวจ 2, ก๊อกน้ำห้องน้ำ, หลอดไฟทางเดิน' :
+      'เช่น Handpiece, Ultrasonic scaler';
+  };
   $$('input[name=category]').forEach(r=>r.onchange=setPh); setPh();
 
   $('#drop').onclick = ()=>$('#files').click();
