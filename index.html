@@ -228,6 +228,15 @@ const CAUSES  = ['อายุการใช้งานของเครื�
 const IMPACTS = ['ไม่มีผลกระทบต่อการรักษา','ต้องหยุดใช้งานเครื่องมือทันที','ต้องเลื่อน / เปลี่ยนแผนการรักษา'];
 const IMPACT_DETAIL_LABEL = 'มีผลกระทบต่อการรักษา';
 const ACTIONS = ['แจ้งหัวหน้างานแล้ว','แยกเครื่องมือออกจากการใช้งาน','ส่งตรวจสอบ / ซ่อม','เปลี่ยนใช้อุปกรณ์สำรอง'];
+/* ----- งานอาคาร ----- */
+const BUILDING_TYPES = [
+  {label:'ระบบไฟฟ้า',            symptoms:['ไฟดับ','ไฟกระพริบ','ปลั๊กพ่วงไหม้','สวิตช์เสีย','ไฟช็อต']},
+  {label:'ระบบแอร์ (ปรับอากาศ)', symptoms:['แอร์ไม่เย็น','แอร์น้ำหยด','แอร์มีเสียงดัง','แอร์ไม่ทำงาน','มีกลิ่นอับ']},
+  {label:'ประตู',                 symptoms:['ประตูฝืด','กลอนประตูพัง','บานพับหลุด','ประตูกระจกแตก','คีย์การ์ดเปิดไม่ได้']},
+  {label:'ผนัง / ตัวอาคาร',       symptoms:['ผนังร้าว','สีลอกร่อน','น้ำรั่วซึมจากเพดาน','ฝ้าเพดานทะลุ','กระเบื้องพื้นแตก']}
+];
+const B_IMPACTS = ['ไม่มีผลกระทบต่อการใช้งาน','ใช้งานพื้นที่ได้บางส่วน','ต้องปิดห้อง / พื้นที่ชั่วคราว','เสี่ยงต่อความปลอดภัย'];
+const B_ACTIONS = ['แจ้งหัวหน้างานแล้ว','กั้นพื้นที่ / ติดป้ายห้ามใช้งาน','ปิดสวิตช์ / ตัดระบบที่เกี่ยวข้อง','ย้ายไปใช้พื้นที่อื่นชั่วคราว'];
 
 /* ---------------- helpers ---------------- */
 const $  = (s,r=document)=>r.querySelector(s);
@@ -404,6 +413,7 @@ let pending = [];   // รูปที่เลือกไว้ [{blob,url}]
 
 function viewNew(){
   pending = [];
+  const typeChips = BUILDING_TYPES.map(b=>`<label class="chk"><input type="radio" name="repair_type" value="${esc(b.label)}" required> ${esc(b.label)}</label>`).join('');
   $('#main').innerHTML = `
   <div class="head"><div><h1>แจ้งซ่อมใหม่</h1><p class="sub" style="margin:0">กรอกข้อมูลตามใบแจ้งซ่อมและรายงานเครื่องมือชำรุด (Work Request Form)</p></div></div>
   <form id="tf">
@@ -411,7 +421,7 @@ function viewNew(){
       <div class="seg">
         <label><input type="radio" name="category" value="medical" checked><span class="ico">🩺</span><div><b>อุปกรณ์การแพทย์</b><span class="d">เครื่องมือ / อุปกรณ์ทางการแพทย์</span></div></label>
         <label><input type="radio" name="category" value="it"><span class="ico">💻</span><div><b>อุปกรณ์ IT</b><span class="d">คอมพิวเตอร์ ปริ้นเตอร์ เครือข่าย ฯลฯ</span></div></label>
-        <label><input type="radio" name="category" value="building"><span class="ico">🏢</span><div><b>อาคาร</b><span class="d">ระบบไฟ ประปา แอร์ ประตู ผนัง ฯลฯ</span></div></label>
+        <label><input type="radio" name="category" value="building"><span class="ico">🏢</span><div><b>อาคาร</b><span class="d">ระบบไฟ แอร์ ประตู ผนัง ฯลฯ</span></div></label>
       </div></div>
 
     <div class="card"><h3>ข้อมูลผู้แจ้ง</h3><div class="grid g3">
@@ -421,31 +431,44 @@ function viewNew(){
       <label class="f">วันที่แจ้งปัญหา<input type="date" name="report_date" value="${today()}"></label>
     </div></div>
 
-    <div class="card"><h3>1. รายละเอียดเครื่องมือ</h3><div class="grid">
-      <label class="f"><span id="eqLbl">ชื่อเครื่องมือ</span> <span class="req">*</span><input type="text" name="equipment_name" required></label>
+    <!-- อุปกรณ์การแพทย์ / IT -->
+    <div class="card" data-cats="medical it"><h3 class="nh" data-t="รายละเอียดเครื่องมือ"></h3><div class="grid">
+      <label class="f">ชื่อเครื่องมือ <span class="req">*</span><input type="text" name="equipment_name" required></label>
       <label class="f">ยี่ห้อ / รุ่น<input type="text" name="brand_model"></label>
       <label class="f">รหัสเครื่องมือ / Serial No.<input type="text" name="serial_no"></label>
       <label class="f">อายุการใช้งานโดยประมาณ<input type="text" name="age_estimate" placeholder="เช่น 3 ปี"></label>
     </div></div>
 
-    <div class="card"><h3>2. รายละเอียดปัญหาที่พบ</h3><div class="grid">
+    <!-- อาคาร -->
+    <div class="card" data-cats="building"><h3 class="nh" data-t="สถานที่และประเภทงานซ่อม"></h3>
+      <label class="f">สถานที่เกิดเหตุ (ระบุชื่อห้อง) <span class="req">*</span><input type="text" name="location" required placeholder="เช่น ห้องตรวจ 2, ห้องน้ำชั้น 1, ล็อบบี้"></label>
+      <div style="margin-top:14px"><label class="f">ประเภทงานซ่อม <span class="req">*</span></label>
+        <div class="chks" style="margin-top:6px">${typeChips}</div></div>
+      <div style="margin-top:14px"><label class="f">อาการที่พบ (เลือกได้หลายข้อ)</label>
+        <div class="chks" id="symBox" style="margin-top:6px"></div></div>
+      <label class="f" style="margin-top:12px">อาการอื่นๆ โปรดระบุ<input type="text" name="symptom_other"></label>
+    </div>
+
+    <!-- รายละเอียดปัญหา (ทุกประเภท) -->
+    <div class="card"><h3 class="nh" id="probTitle" data-t="รายละเอียดปัญหาที่พบ"></h3><div class="grid">
       <label class="f">วันที่ / เวลาที่เกิดเหตุ<input type="datetime-local" name="incident_at"></label>
-      <label class="f">สถานที่ใช้งาน<input type="text" name="location"></label>
-      <label class="f span2">ลักษณะปัญหา / ความเสียหายที่พบ <span class="req">*</span><textarea name="problem" required></textarea></label>
-      <div class="span2"><label class="f">แนบรูปอุปกรณ์ที่ชำรุด</label>
+      <label class="f" data-cats="medical it">สถานที่ใช้งาน<input type="text" name="location"></label>
+      <label class="f span2"><span id="probLbl">ลักษณะปัญหา / ความเสียหายที่พบ</span> <span class="req">*</span><textarea name="problem" required></textarea></label>
+      <div class="span2"><label class="f">แนบรูป</label>
         <div class="drop" id="drop">📷 คลิกเพื่อเลือกรูป (เลือกได้หลายรูป)</div>
         <input type="file" id="files" accept="image/*" multiple class="hide">
         <div class="thumbs" id="thumbs"></div></div>
     </div></div>
 
-    <div class="card"><h3>3. สาเหตุที่คาดว่าเครื่องมือชำรุด</h3>
+    <div class="card" data-cats="medical it"><h3 class="nh" data-t="สาเหตุที่คาดว่าเครื่องมือชำรุด"></h3>
       <div class="chks">${cbGroup('causes',CAUSES)}</div>
       <div class="grid" style="margin-top:12px">
         <label class="f">อื่นๆ โปรดระบุ<input type="text" name="cause_other"></label>
         <label class="f span2">รายละเอียดเพิ่มเติม<textarea name="details"></textarea></label>
       </div></div>
 
-    <div class="card"><h3>4. ผลกระทบที่เกิดขึ้น</h3>
+    <!-- ผลกระทบ: การแพทย์ -->
+    <div class="card" data-cats="medical"><h3 class="nh" data-t="ผลกระทบที่เกิดขึ้น"></h3>
       <div class="chks">${cbGroup('impacts',IMPACTS)}
         <label class="chk"><input type="checkbox" name="impacts" value="${IMPACT_DETAIL_LABEL}"> ${IMPACT_DETAIL_LABEL}</label></div>
       <div class="grid" style="margin-top:12px">
@@ -453,23 +476,46 @@ function viewNew(){
         <label class="f">อื่นๆ<input type="text" name="impact_other"></label>
       </div></div>
 
-    <div class="card"><h3>5. การดำเนินการเบื้องต้น</h3>
+    <!-- ผลกระทบ: อาคาร -->
+    <div class="card" data-cats="building"><h3 class="nh" data-t="ผลกระทบ"></h3>
+      <div class="chks">${cbGroup('impacts',B_IMPACTS)}</div>
+      <div class="grid" style="margin-top:12px"><label class="f">อื่นๆ โปรดระบุ<input type="text" name="impact_other"></label></div></div>
+
+    <div class="card" data-cats="medical it"><h3 class="nh" data-t="การดำเนินการเบื้องต้น"></h3>
       <div class="chks">${cbGroup('actions',ACTIONS)}</div>
+      <div class="grid" style="margin-top:12px"><label class="f">อื่นๆ<input type="text" name="action_other"></label></div></div>
+
+    <div class="card" data-cats="building"><h3 class="nh" data-t="การดำเนินงานเบื้องต้น"></h3>
+      <div class="chks">${cbGroup('actions',B_ACTIONS)}</div>
       <div class="grid" style="margin-top:12px"><label class="f">อื่นๆ<input type="text" name="action_other"></label></div></div>
 
     <div class="actions"><button class="btn pri" id="submitBtn">ส่งใบแจ้งซ่อม</button><a class="btn" href="#/list" style="text-decoration:none">ยกเลิก</a></div>
   </form>`;
 
   const cat = ()=>$('input[name=category]:checked').value;
-  const setPh = ()=>{
-    const c = cat();
-    $('#eqLbl').textContent = c==='building' ? 'รายการ / จุดที่ซ่อม' : 'ชื่อเครื่องมือ';
-    $('input[name=equipment_name]').placeholder =
-      c==='it' ? 'เช่น คอมพิวเตอร์ตั้งโต๊ะ, เครื่องปริ้นเตอร์' :
-      c==='building' ? 'เช่น แอร์ห้องตรวจ 2, ก๊อกน้ำห้องน้ำ, หลอดไฟทางเดิน' :
-      'เช่น Handpiece, Ultrasonic scaler';
+  const drawSym = ()=>{
+    const r = $('input[name=repair_type]:checked');
+    const bt = r && BUILDING_TYPES.find(b=>b.label===r.value);
+    $('#symBox').innerHTML = bt ? cbGroup('symptoms',bt.symptoms) : '<span class="muted">เลือกประเภทงานซ่อมก่อน</span>';
   };
-  $$('input[name=category]').forEach(r=>r.onchange=setPh); setPh();
+  const applyCat = ()=>{
+    const c = cat();
+    // แสดง/ซ่อนส่วนตามประเภท และปิด input ของส่วนที่ซ่อน (จะได้ไม่ติด required และไม่ถูกส่ง)
+    $$('#tf [data-cats]').forEach(el=>{
+      const on = el.dataset.cats.split(' ').includes(c);
+      el.classList.toggle('hide',!on);
+      $$('input,select,textarea',el).forEach(i=>i.disabled=!on);
+    });
+    $('#probTitle').dataset.t = c==='building' ? 'รายละเอียดอาการ' : 'รายละเอียดปัญหาที่พบ';
+    $('#probLbl').textContent = c==='building' ? 'รายละเอียดอาการ (อธิบายลักษณะปัญหาที่พบ)' : 'ลักษณะปัญหา / ความเสียหายที่พบ';
+    $('textarea[name=problem]').placeholder = c==='building' ? 'เช่น แอร์เปิดติดแต่มีลมร้อนออกมาอย่างเดียว หรือ ประตูระบบคีย์การ์ดค้างปิดไม่ได้' : '';
+    $('input[name=equipment_name]').placeholder = c==='it' ? 'เช่น คอมพิวเตอร์ตั้งโต๊ะ, เครื่องปริ้นเตอร์' : 'เช่น Handpiece, Ultrasonic scaler';
+    let i = 0;
+    $$('#tf .card:not(.hide) h3.nh').forEach(h=>{ h.textContent = (++i)+'. '+h.dataset.t; });
+  };
+  $$('input[name=category]').forEach(r=>r.onchange=applyCat);
+  $$('input[name=repair_type]').forEach(r=>r.onchange=drawSym);
+  drawSym(); applyCat();
 
   $('#drop').onclick = ()=>$('#files').click();
   $('#files').onchange = async e=>{
@@ -498,14 +544,16 @@ async function compress(file,max=1600,q=.82){
 async function submitTicket(ev){
   ev.preventDefault();
   const form = ev.target, fd = new FormData(form), v = n=>(fd.get(n)||'').toString().trim();
-  const many = n=>$$(`input[name=${n}]:checked`,form).map(i=>i.value);
+  const many = n=>$$(`input[name=${n}]:checked:not(:disabled)`,form).map(i=>i.value);
   const btn = $('#submitBtn'); btn.disabled=true; btn.textContent='กำลังบันทึก...';
   const id = crypto.randomUUID();
   const row = {
     id, created_by: me.id, category: v('category'),
     reporter_name:v('reporter_name'), reporter_position:v('reporter_position'), branch:v('branch'),
     report_date: v('report_date')||today(),
-    equipment_name:v('equipment_name'), brand_model:v('brand_model'), serial_no:v('serial_no'), age_estimate:v('age_estimate'),
+    equipment_name: v('category')==='building' ? v('repair_type') : v('equipment_name'),
+    brand_model:v('brand_model'), serial_no:v('serial_no'), age_estimate:v('age_estimate'),
+    repair_type:v('repair_type')||null, symptoms:many('symptoms'), symptom_other:v('symptom_other'),
     incident_at: v('incident_at') ? new Date(v('incident_at')).toISOString() : null,
     location:v('location'), problem:v('problem'),
     causes:many('causes'), cause_other:v('cause_other'), details:v('details'),
@@ -556,6 +604,23 @@ async function viewDetail(id){
   };
   const kv = (l,v)=>`<dl class="kv"><dt>${l}</dt><dd>${esc(v)||'<span class="muted">-</span>'}</dd></dl>`;
   const idx = STEPS.indexOf(t.status);
+  const isB = t.category==='building', isM = t.category==='medical';
+  let nn = 0; const H = x => `${++nn}. ${x}`;
+  const gal = imgs.length ? `<dt class="muted" style="margin:6px 0">รูปแนบ (${imgs.length})</dt><div class="gallery">${imgs.map(u=>`<a href="${u}" target="_blank" rel="noopener"><img src="${u}" alt=""></a>`).join('')}</div>` : '';
+  const cProblem = (title,showLoc)=>`<div class="card"><h3>${H(title)}</h3><div class="grid">${kv('วันที่ / เวลาที่เกิดเหตุ',fmtDT(t.incident_at))}${showLoc?kv('สถานที่ใช้งาน',t.location):''}<div class="span2">${kv(isB?'รายละเอียดอาการ':'ลักษณะปัญหา / ความเสียหายที่พบ',t.problem)}</div></div>${gal}</div>`;
+  const parts = [];
+  if(isB){
+    parts.push(`<div class="card"><h3>${H('สถานที่และประเภทงานซ่อม')}</h3><div class="grid">${kv('สถานที่เกิดเหตุ',t.location)}${kv('ประเภทงานซ่อม',t.repair_type)}</div><dl class="kv"><dt>อาการที่พบ</dt><dd>${tags(t.symptoms,t.symptom_other)}</dd></dl></div>`);
+    parts.push(cProblem('รายละเอียดอาการ',false));
+    parts.push(`<div class="card"><h3>${H('ผลกระทบ')}</h3>${tags(t.impacts,t.impact_other)}</div>`);
+  }else{
+    parts.push(`<div class="card"><h3>${H('รายละเอียดเครื่องมือ')}</h3><div class="grid">${kv('ชื่อเครื่องมือ',t.equipment_name)}${kv('ยี่ห้อ / รุ่น',t.brand_model)}${kv('รหัสเครื่องมือ / Serial No.',t.serial_no)}${kv('อายุการใช้งานโดยประมาณ',t.age_estimate)}</div></div>`);
+    parts.push(cProblem('รายละเอียดปัญหาที่พบ',true));
+    parts.push(`<div class="card"><h3>${H('สาเหตุที่คาดว่าเครื่องมือชำรุด')}</h3>${tags(t.causes,t.cause_other)}<div style="margin-top:12px">${kv('รายละเอียดเพิ่มเติม',t.details)}</div></div>`);
+    if(isM) parts.push(`<div class="card"><h3>${H('ผลกระทบที่เกิดขึ้น')}</h3>${tags((t.impacts||[]).map(x=>x===IMPACT_DETAIL_LABEL&&t.impact_detail?`${x}: ${t.impact_detail}`:x),t.impact_other)}</div>`);
+  }
+  parts.push(`<div class="card"><h3>${H(isB?'การดำเนินงานเบื้องต้น':'การดำเนินการเบื้องต้น')}</h3>${tags(t.actions,t.action_other)}</div>`);
+  const bodyCards = parts.join('\n');
 
   m.innerHTML = `
   <p style="margin:0 0 10px"><a href="#/list" style="text-decoration:none">← กลับรายการ</a></p>
@@ -581,22 +646,9 @@ async function viewDetail(id){
   <div class="card"><h3>ข้อมูลผู้แจ้ง</h3><div class="grid g3">
     ${kv('ชื่อผู้แจ้ง',t.reporter_name)}${kv('ตำแหน่ง',t.reporter_position)}${kv('สาขา',t.branch)}${kv('วันที่แจ้งปัญหา',fmtDate(t.report_date))}</div></div>
 
-  <div class="card"><h3>1. รายละเอียดเครื่องมือ</h3><div class="grid">
-    ${kv('ชื่อเครื่องมือ',t.equipment_name)}${kv('ยี่ห้อ / รุ่น',t.brand_model)}${kv('รหัสเครื่องมือ / Serial No.',t.serial_no)}${kv('อายุการใช้งานโดยประมาณ',t.age_estimate)}</div></div>
+  ${bodyCards}
 
-  <div class="card"><h3>2. รายละเอียดปัญหาที่พบ</h3><div class="grid">
-    ${kv('วันที่ / เวลาที่เกิดเหตุ',fmtDT(t.incident_at))}${kv('สถานที่ใช้งาน',t.location)}
-    <div class="span2">${kv('ลักษณะปัญหา / ความเสียหายที่พบ',t.problem)}</div></div>
-    ${imgs.length?`<dt class="muted" style="margin:6px 0">รูปแนบ (${imgs.length})</dt><div class="gallery">${imgs.map(u=>`<a href="${u}" target="_blank" rel="noopener"><img src="${u}" alt=""></a>`).join('')}</div>`:''}
-  </div>
-
-  <div class="card"><h3>3. สาเหตุที่คาดว่าเครื่องมือชำรุด</h3>${tags(t.causes,t.cause_other)}
-    <div style="margin-top:12px">${kv('รายละเอียดเพิ่มเติม',t.details)}</div></div>
-
-  <div class="card"><h3>4. ผลกระทบที่เกิดขึ้น</h3>${tags((t.impacts||[]).map(x=>x===IMPACT_DETAIL_LABEL&&t.impact_detail?`${x}: ${t.impact_detail}`:x),t.impact_other)}</div>
-  <div class="card"><h3>5. การดำเนินการเบื้องต้น</h3>${tags(t.actions,t.action_other)}</div>
-
-  <div class="card"><h3>6. ความคิดเห็นผู้จัดการสาขา</h3>
+  <div class="card"><h3>${H('ความคิดเห็นผู้จัดการสาขา')}</h3>
     ${isIT ? `<label class="f">ความคิดเห็น<textarea id="mgOp">${esc(t.manager_opinion)}</textarea></label>
       <label class="f" style="margin-top:10px">ข้อเสนอแนะ / แนวทางป้องกันเพิ่มเติม<textarea id="mgRec">${esc(t.recommendation)}</textarea></label>
       <div style="margin-top:10px"><button class="btn" id="mgBtn">บันทึกความคิดเห็น</button></div>`
@@ -697,46 +749,64 @@ const logoHtml = () => CONFIG.LOGO_URL
 
 function formHtml(t,imgs){
   const has = (arr,x)=>(arr||[]).includes(x);
+  const isB = t.category==='building', isM = t.category==='medical';
+  let n = 0; const H = x => `<h4>${++n}. ${x}</h4>`;
+  const p1 = [], p2 = [];
+  if(isB){
+    const bt = BUILDING_TYPES.find(b=>b.label===t.repair_type);
+    p1.push(`${H('สถานที่และประเภทงานซ่อม')}
+      <div class="fr"><span class="fl">สถานที่เกิดเหตุ (ชื่อห้อง):</span>${U(t.location)}<span class="fl">วันที่ / เวลาที่พบ:</span>${U(fmtDT(t.incident_at))}</div>
+      <div class="fr"><span class="fl">ประเภทงานซ่อม:</span></div>
+      <div class="cbs">${BUILDING_TYPES.map(b=>CB(t.repair_type===b.label,b.label)).join('')}</div>
+      <div class="fr"><span class="fl">อาการที่พบ:</span></div>
+      <div class="cbs">${(bt?bt.symptoms:[]).map(x=>CB(has(t.symptoms,x),x)).join('')}</div>
+      <div class="fr"><span class="cb"><i>${t.symptom_other?'☑':'☐'}</i> อื่นๆ โปรดระบุ</span>${U(t.symptom_other)}</div>`);
+    p1.push(`${H('รายละเอียดอาการ (พร้อมแนบรูป)')}${LN(t.problem)}`);
+    p2.push(`${H('ผลกระทบ')}
+      <div class="cbs">${B_IMPACTS.map(c=>`<span class="cb" style="width:50%"><i>${has(t.impacts,c)?'☑':'☐'}</i> ${esc(c)}</span>`).join('')}</div>
+      <div class="fr"><span class="cb"><i>${t.impact_other?'☑':'☐'}</i> อื่นๆ</span>${U(t.impact_other)}</div>`);
+    p2.push(`${H('การดำเนินงานเบื้องต้น')}
+      <div class="cbs">${B_ACTIONS.map(c=>`<span class="cb" style="width:50%"><i>${has(t.actions,c)?'☑':'☐'}</i> ${esc(c)}</span>`).join('')}</div>
+      <div class="fr"><span class="cb"><i>${t.action_other?'☑':'☐'}</i> อื่นๆ</span>${U(t.action_other)}</div>`);
+  }else{
+    p1.push(`${H('รายละเอียดเครื่องมือ')}
+      <div class="fr"><span class="fl">ชื่อเครื่องมือ:</span>${U(t.equipment_name)}<span class="fl">ยี่ห้อ / รุ่น:</span>${U(t.brand_model)}</div>
+      <div class="fr"><span class="fl">รหัสเครื่องมือ / Serial No.:</span>${U(t.serial_no)}<span class="fl">อายุการใช้งานโดยประมาณ:</span>${U(t.age_estimate)}</div>`);
+    p1.push(`${H('รายละเอียดปัญหาที่พบ')}
+      <div class="fr"><span class="fl">วันที่ / เวลาที่เกิดเหตุ:</span>${U(fmtDT(t.incident_at))}<span class="fl">สถานที่ใช้งาน:</span>${U(t.location)}</div>
+      <div class="fr"><span class="fl">ลักษณะปัญหา / ความเสียหายที่พบ (พร้อมแนบรูปอุปกรณ์ที่ชำรุด) :</span></div>
+      ${LN(t.problem)}`);
+    p1.push(`${H('สาเหตุที่คาดว่าเครื่องมือชำรุด')}
+      <div class="cbs">${CAUSES.map(c=>CB(has(t.causes,c),c)).join('')}</div>
+      <div class="fr"><span class="cb"><i>${t.cause_other?'☑':'☐'}</i> อื่นๆ โปรดระบุ</span>${U(t.cause_other)}</div>
+      <div class="fr"><b class="fl">รายละเอียดเพิ่มเติม :</b>${U('')}</div>
+      ${LN(t.details)}`);
+    if(isM) p2.push(`${H('ผลกระทบที่เกิดขึ้น')}
+      <div class="cbs">${IMPACTS.map(c=>CB(has(t.impacts,c),c)).join('')}</div>
+      <div class="fr"><span class="cb"><i>${has(t.impacts,IMPACT_DETAIL_LABEL)?'☑':'☐'}</i> มีผลกระทบต่อการรักษา โปรดระบุ:</span>${U(t.impact_detail)}</div>
+      <div class="fr"><span class="cb"><i>${t.impact_other?'☑':'☐'}</i> อื่นๆ</span>${U(t.impact_other)}</div>`);
+    p2.push(`${H('การดำเนินการเบื้องต้น')}
+      <div class="cbs">${ACTIONS.map(c=>`<span class="cb" style="width:50%"><i>${has(t.actions,c)?'☑':'☐'}</i> ${esc(c)}</span>`).join('')}</div>
+      <div class="fr"><span class="cb"><i>${t.action_other?'☑':'☐'}</i> อื่นๆ</span>${U(t.action_other)}</div>`);
+  }
+  p2.push(`${H('ความคิดเห็นผู้จัดการสาขา')}
+    ${LN(t.manager_opinion)}
+    <div class="fr" style="margin-top:12px"><span class="fl">ข้อเสนอแนะ / แนวทางป้องกันเพิ่มเติม</span></div>
+    ${LN(t.recommendation)}`);
+
   const page1 = `<section class="sheet">
     ${logoHtml()}
-    <div class="ttl">ใบแจ้งซ่อมและรายงานเครื่องมือชำรุด<small>(Work Request Form)</small></div>
+    <div class="ttl">ใบแจ้งซ่อมและรายงาน${isB?'งานซ่อมอาคาร':'เครื่องมือชำรุด'}<small>(Work Request Form)</small></div>
     <div class="fr right"><span class="fl">เลขที่เอกสาร:</span>${U(t.ticket_no,'fixed')}</div>
     <div class="fr right"><span class="fl">วันที่แจ้งปัญหา:</span>${U(fmtDate(t.report_date),'fixed')}</div>
     <div class="fr right"><span class="fl">ประเภท:</span>${U(CATEGORY[t.category]?.label,'fixed')}</div>
     <div class="fr"><span class="fl">ชื่อผู้แจ้ง:</span>${U(t.reporter_name)}<span class="fl">ตำแหน่ง:</span>${U(t.reporter_position)}<span class="fl">สาขา:</span>${U(t.branch)}</div>
-
-    <h4>1. รายละเอียดเครื่องมือ</h4>
-    <div class="fr"><span class="fl">ชื่อเครื่องมือ:</span>${U(t.equipment_name)}<span class="fl">ยี่ห้อ / รุ่น:</span>${U(t.brand_model)}</div>
-    <div class="fr"><span class="fl">รหัสเครื่องมือ / Serial No.:</span>${U(t.serial_no)}<span class="fl">อายุการใช้งานโดยประมาณ:</span>${U(t.age_estimate)}</div>
-
-    <h4>2. รายละเอียดปัญหาที่พบ</h4>
-    <div class="fr"><span class="fl">วันที่ / เวลาที่เกิดเหตุ:</span>${U(fmtDT(t.incident_at))}<span class="fl">สถานที่ใช้งาน:</span>${U(t.location)}</div>
-    <div class="fr"><span class="fl">ลักษณะปัญหา / ความเสียหายที่พบ (พร้อมแนบรูปอุปกรณ์ที่ชำรุด) :</span></div>
-    ${LN(t.problem)}
-
-    <h4>3. สาเหตุที่คาดว่าเครื่องมือชำรุด</h4>
-    <div class="cbs">${CAUSES.map(c=>CB(has(t.causes,c),c)).join('')}</div>
-    <div class="fr"><span class="cb"><i>${t.cause_other?'☑':'☐'}</i> อื่นๆ โปรดระบุ</span>${U(t.cause_other)}</div>
-    <div class="fr"><b class="fl">รายละเอียดเพิ่มเติม :</b>${U('')}</div>
-    ${LN(t.details)}
+    ${p1.join('')}
   </section>`;
 
   const page2 = `<section class="sheet">
     ${logoHtml()}
-    <h4>4. ผลกระทบที่เกิดขึ้น</h4>
-    <div class="cbs">${IMPACTS.map(c=>CB(has(t.impacts,c),c)).join('')}</div>
-    <div class="fr"><span class="cb"><i>${has(t.impacts,IMPACT_DETAIL_LABEL)?'☑':'☐'}</i> มีผลกระทบต่อการรักษา โปรดระบุ:</span>${U(t.impact_detail)}</div>
-    <div class="fr"><span class="cb"><i>${t.impact_other?'☑':'☐'}</i> อื่นๆ</span>${U(t.impact_other)}</div>
-
-    <h4>5. การดำเนินการเบื้องต้น</h4>
-    <div class="cbs">${ACTIONS.map(c=>`<span class="cb" style="width:50%"><i>${has(t.actions,c)?'☑':'☐'}</i> ${esc(c)}</span>`).join('')}</div>
-    <div class="fr"><span class="cb"><i>${t.action_other?'☑':'☐'}</i> อื่นๆ</span>${U(t.action_other)}</div>
-
-    <h4>6. ความคิดเห็นผู้จัดการสาขา</h4>
-    ${LN(t.manager_opinion)}
-    <div class="fr" style="margin-top:12px"><span class="fl">ข้อเสนอแนะ / แนวทางป้องกันเพิ่มเติม</span></div>
-    ${LN(t.recommendation)}
-
+    ${p2.join('')}
     <div class="sign">
       <div><div class="fr"><span class="fl">ลงชื่อผู้แจ้ง</span>${U('')}</div>
         <div class="fr"><span class="fl">(</span>${U(t.reporter_name).replace('class="u "','class="u" style="text-align:center;border:0"')}<span class="fl">)</span></div>
