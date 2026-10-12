@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 :root{
   --red:#c8102e; --red-d:#9d0c24; --ink:#1f2430; --mute:#6b7280; --line:#e5e7eb;
@@ -106,6 +107,31 @@ label.chk input{width:17px;height:17px;accent-color:var(--red)}
 .c-medical{background:#fde8ec;color:#9d0c24}
 .c-it{background:#dbeafe;color:#1e40af}
 .c-building{background:#ccfbf1;color:#115e59}
+
+/* ---------- dashboard ---------- */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:16px}
+.kpi{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.kpi .n{font-size:30px;font-weight:700;line-height:1.1}
+.kpi .l{font-size:13px;color:var(--mute)}
+.dgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
+@media(max-width:860px){.dgrid{grid-template-columns:1fr}}
+.dgrid .card{margin:0}
+.hb{display:grid;grid-template-columns:140px 1fr 36px;gap:10px;align-items:center;padding:4px 0;border-radius:6px}
+.hb.link{cursor:pointer}
+.hb.link:hover{background:#f7f8fa}
+.hb .hl{font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hb .ht{background:#f1f2f4;height:12px;border-radius:99px;overflow:hidden}
+.hb .hf{height:100%;border-radius:99px;min-width:2px}
+.hb .hn{text-align:right;font-weight:600;font-variant-numeric:tabular-nums}
+.cols{display:flex;gap:10px;align-items:flex-end;height:170px;padding-top:6px}
+.cols .col{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100%;min-width:0}
+.cols .bar{width:100%;max-width:46px;background:var(--red);border-radius:6px 6px 0 0;min-height:2px}
+.cols .v{font-size:12.5px;font-weight:600;margin-bottom:3px}
+.cols .m{font-size:12px;color:var(--mute);margin-top:6px;white-space:nowrap}
+.oldl{list-style:none;margin:0;padding:0}
+.oldl li{display:flex;justify-content:space-between;gap:10px;padding:8px 6px;border-bottom:1px solid #f0f1f3;cursor:pointer;border-radius:6px}
+.oldl li:last-child{border-bottom:0}
+.oldl li:hover{background:#f7f8fa}
 
 /* ---------- stepper ---------- */
 .steps{display:flex;gap:0;margin:6px 0 4px}
@@ -219,6 +245,9 @@ const STATUS = {
   cancelled:     {label:'ยกเลิก',               cls:'s-cancel'}
 };
 const STEPS = ['open','checking','repairing','waiting_parts','done'];
+const ACTIVE = ['open','checking','repairing','waiting_parts'];
+const STATUS_COLOR = {open:'#6366f1',checking:'#f59e0b',repairing:'#f97316',waiting_parts:'#a855f7',done:'#16a34a',cancelled:'#9ca3af'};
+const CAT_COLOR = {medical:'#c8102e',it:'#2563eb',building:'#0f766e'};
 const CATEGORY = {
   medical:{label:'อุปกรณ์การแพทย์', cls:'c-medical', ico:'🩺'},
   it:     {label:'อุปกรณ์ IT',       cls:'c-it',      ico:'💻'},
@@ -324,8 +353,9 @@ async function enter(user){
 function renderShell(){
   $('#app').innerHTML = `
   <header class="topbar"><div class="in">
-    <a class="brand" href="#/list">TANTATAT<small>ระบบแจ้งซ่อม</small></a>
+    <a class="brand" href="${isIT?'#/dashboard':'#/list'}">TANTATAT<small>ระบบแจ้งซ่อม</small></a>
     <nav id="nav">
+      ${isIT?'<a href="#/dashboard" data-r="dashboard">Dashboard</a>':''}
       <a href="#/list" data-r="list">${isIT?'รายการทั้งหมด':'รายการของฉัน'}</a>
       <a href="#/new" data-r="new">+ แจ้งซ่อมใหม่</a>
       ${isIT?'<a href="#/users" data-r="users">ผู้ใช้งาน</a>':''}
@@ -342,13 +372,14 @@ function renderShell(){
    ===================================================================== */
 window.addEventListener('hashchange',()=>{ if(me) route(); });
 function route(){
-  const h = location.hash || '#/list';
+  const h = location.hash || (isIT ? '#/dashboard' : '#/list');
   const parts = h.replace(/^#\//,'').split('/');
   const name = parts[0];
   $$('#nav a').forEach(a=>a.classList.toggle('on', a.dataset.r===(name==='t'?'list':name)));
   window.scrollTo(0,0);
   if(name==='new') return viewNew();
   if(name==='t' && parts[1]) return viewDetail(parts[1]);
+  if(name==='dashboard' && isIT) return viewDashboard();
   if(name==='users' && isIT) return viewUsers();
   return viewList();
 }
@@ -364,12 +395,14 @@ async function viewList(){
   if(error){ m.innerHTML=`<div class="err">${esc(errMsg(error))}</div>`; return; }
   const all = data||[];
   const count = s => all.filter(t=>t.status===s).length;
+  let lastRows = [];
 
   m.innerHTML = `
   <div class="head">
     <div><h1>${isIT?'รายการแจ้งซ่อมทั้งหมด':'รายการแจ้งซ่อมของฉัน'}</h1>
     <p class="sub" style="margin:0">${all.length} รายการ</p></div>
-    <a class="btn pri" href="#/new" style="text-decoration:none">+ แจ้งซ่อมใหม่</a>
+    <div class="actions"><button class="btn" id="exportBtn" title="ดาวน์โหลดรายการที่แสดงอยู่เป็นไฟล์ Excel">⬇ Export Excel</button>
+    <a class="btn pri" href="#/new" style="text-decoration:none">+ แจ้งซ่อมใหม่</a></div>
   </div>
   <div class="stats">
     <button class="stat ${listState.status===''?'on':''}" data-s=""><div class="n">${all.length}</div><div class="l">ทั้งหมด</div></button>
@@ -387,6 +420,7 @@ async function viewList(){
       (!listState.status || t.status===listState.status) &&
       (!listState.cat || t.category===listState.cat) &&
       (!q || [t.ticket_no,t.equipment_name,t.brand_model,t.serial_no,t.reporter_name,t.branch,t.problem].some(v=>String(v||'').toLowerCase().includes(q))));
+    lastRows = rows; $('#exportBtn').textContent = `⬇ Export Excel (${rows.length})`;
     $('#rows').innerHTML = rows.length ? `<div class="tablewrap"><table class="tbl"><thead><tr>
       <th>Ticket</th><th>วันที่แจ้ง</th><th>ประเภท</th><th>เครื่องมือ / อุปกรณ์</th>${isIT?'<th>ผู้แจ้ง / สาขา</th>':''}<th>สถานะ</th></tr></thead><tbody>
       ${rows.map(t=>`<tr data-id="${t.id}">
@@ -400,9 +434,135 @@ async function viewList(){
     $$('#rows tbody tr').forEach(tr=>tr.onclick=()=>location.hash='#/t/'+tr.dataset.id);
   };
   draw();
+  $('#exportBtn').onclick = ()=>exportExcel(lastRows.map(r=>r.id));
   $('#fq').oninput = e=>{listState.q=e.target.value; draw();};
   $('#fc').onchange = e=>{listState.cat=e.target.value; draw();};
   $$('.stat').forEach(b=>b.onclick=()=>{listState.status=b.dataset.s; viewList();});
+}
+
+/* =====================================================================
+   EXPORT EXCEL  (ผู้ใช้ทั่วไปได้เฉพาะของตัวเอง / IT ได้ทั้งหมดตามที่เห็น)
+   ===================================================================== */
+async function exportExcel(ids){
+  if(typeof XLSX==='undefined') return toast('โหลดตัวช่วยสร้างไฟล์ Excel ไม่สำเร็จ กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองใหม่',true);
+  const {data,error} = await sb.from('tickets').select('*').order('created_at',{ascending:false});
+  if(error) return toast(errMsg(error),true);
+  const set = ids ? new Set(ids) : null;
+  const list = (data||[]).filter(t=>(!set||set.has(t.id)) && (isIT || t.created_by===me.id));
+  if(!list.length) return toast('ไม่มีรายการให้ส่งออก',true);
+  const j = a => (a||[]).join(', ');
+  const rows = list.map(t=>({
+    'เลขที่ Ticket': t.ticket_no,
+    'ประเภท': CATEGORY[t.category]?.label||t.category,
+    'สถานะ': STATUS[t.status]?.label||t.status,
+    'วันที่แจ้ง': fmtDate(t.created_at),
+    'ผู้แจ้ง': t.reporter_name||'',
+    'ตำแหน่ง': t.reporter_position||'',
+    'สาขา': t.branch||'',
+    'ชื่อเครื่องมือ / รายการ': t.equipment_name||'',
+    'ยี่ห้อ / รุ่น': t.brand_model||'',
+    'Serial No.': t.serial_no||'',
+    'สถานที่': t.location||'',
+    'วันที่ / เวลาเกิดเหตุ': fmtDT(t.incident_at),
+    'ประเภทงานซ่อม (อาคาร)': t.repair_type||'',
+    'อาการที่พบ (อาคาร)': [j(t.symptoms), t.symptom_other].filter(Boolean).join(', '),
+    'ปัญหาที่พบ / รายละเอียด': t.problem||'',
+    'สาเหตุที่คาดว่าชำรุด': [j(t.causes), t.cause_other].filter(Boolean).join(', '),
+    'ผลกระทบ': [j(t.impacts), t.impact_detail, t.impact_other].filter(Boolean).join(', '),
+    'การดำเนินการเบื้องต้น': [j(t.actions), t.action_other].filter(Boolean).join(', '),
+    'ผู้ดูแล (IT)': t.handled_by_name||'',
+    'ความคิดเห็นผู้จัดการ': t.manager_opinion||'',
+    'จำนวนรูปแนบ': (t.images||[]).length,
+    'อัปเดตล่าสุด': fmtDT(t.updated_at)
+  }));
+  const ws = XLSX.utils.json_to_sheet(rows);
+  ws['!cols'] = Object.keys(rows[0]).map(k=>({wch: Math.min(48, Math.max(12, k.length+2, ...rows.map(r=>String(r[k]??'').length+2)))}));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'ใบแจ้งซ่อม');
+  XLSX.writeFile(wb, `repair-requests-${today()}.xlsx`);
+  toast(`ส่งออก ${rows.length} รายการแล้ว`);
+}
+
+/* =====================================================================
+   DASHBOARD (IT only)
+   ===================================================================== */
+let dashPeriod = 'all';
+async function viewDashboard(){
+  const m = $('#main');
+  m.innerHTML = '<p class="muted">กำลังโหลด...</p>';
+  const {data,error} = await sb.from('tickets').select('id,ticket_no,category,status,equipment_name,reporter_name,branch,created_at,updated_at').order('created_at',{ascending:false});
+  if(error){ m.innerHTML=`<div class="err">${esc(errMsg(error))}</div>`; return; }
+  const all = data||[];
+  const DAY = 86400000, now = Date.now();
+
+  const inPeriod = t=>{
+    const age = now - new Date(t.created_at).getTime();
+    if(dashPeriod==='30') return age <= 30*DAY;
+    if(dashPeriod==='90') return age <= 90*DAY;
+    if(dashPeriod==='year') return new Date(t.created_at).getFullYear() === new Date().getFullYear();
+    return true;
+  };
+  const bars = (rows,attr)=>{
+    const max = Math.max(1,...rows.map(r=>r.n));
+    return rows.map(r=>`<div class="hb ${attr?'link':''}" ${attr?`data-${attr}="${esc(r.key)}"`:''} title="${esc(r.label)}: ${r.n}">
+      <div class="hl">${esc(r.label)}</div><div class="ht"><div class="hf" style="width:${r.n/max*100}%;background:${r.color}"></div></div><div class="hn">${r.n}</div></div>`).join('') || '<p class="muted" style="margin:0">ไม่มีข้อมูล</p>';
+  };
+
+  const draw = ()=>{
+    const d = all.filter(inPeriod);
+    const active = d.filter(t=>ACTIVE.includes(t.status)).length;
+    const done = d.filter(t=>t.status==='done');
+    const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).getTime();
+    const thisMonth = all.filter(t=>new Date(t.created_at).getTime() >= monthStart).length;
+    const avg = done.length ? done.reduce((a,t)=>a+(new Date(t.updated_at)-new Date(t.created_at)),0)/done.length/DAY : null;
+
+    const byStatus = Object.keys(STATUS).map(k=>({key:k,label:STATUS[k].label,n:d.filter(t=>t.status===k).length,color:STATUS_COLOR[k]}));
+    const byCat = Object.keys(CATEGORY).map(k=>({key:k,label:CATEGORY[k].label,n:d.filter(t=>t.category===k).length,color:CAT_COLOR[k]}));
+    const bm = {};
+    d.forEach(t=>{ const b=(t.branch||'').trim()||'(ไม่ระบุสาขา)'; bm[b]=(bm[b]||0)+1; });
+    const byBranch = Object.entries(bm).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([k,n])=>({key:k,label:k,n,color:'#475569'}));
+
+    const months = [];
+    for(let i=5;i>=0;i--){ const dt = new Date(new Date().getFullYear(), new Date().getMonth()-i, 1); months.push({y:dt.getFullYear(),m:dt.getMonth(),label:dt.toLocaleDateString('th-TH',{month:'short',year:'2-digit'}),n:0}); }
+    all.forEach(t=>{ const c=new Date(t.created_at); const x=months.find(o=>o.y===c.getFullYear()&&o.m===c.getMonth()); if(x) x.n++; });
+    const mmax = Math.max(1,...months.map(x=>x.n));
+
+    const oldest = all.filter(t=>ACTIVE.includes(t.status)).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at)).slice(0,6);
+
+    $('#dash').innerHTML = `
+    <div class="kpis">
+      <div class="kpi"><div class="n">${d.length}</div><div class="l">คำขอทั้งหมด${dashPeriod==='all'?'':' (ตามช่วงเวลา)'}</div></div>
+      <div class="kpi"><div class="n" style="color:#b45309">${active}</div><div class="l">กำลังดำเนินการ / ค้างอยู่</div></div>
+      <div class="kpi"><div class="n" style="color:#15803d">${done.length}</div><div class="l">เสร็จสิ้นแล้ว</div></div>
+      <div class="kpi"><div class="n">${thisMonth}</div><div class="l">แจ้งใหม่เดือนนี้</div></div>
+      <div class="kpi"><div class="n">${avg===null?'-':avg.toFixed(1)}<span style="font-size:14px;font-weight:500"> ${avg===null?'':'วัน'}</span></div><div class="l">เวลาเฉลี่ยจนเสร็จ (โดยประมาณ)</div></div>
+    </div>
+    <div class="dgrid">
+      <div class="card"><h3>แยกตามสถานะ <span class="muted">(คลิกเพื่อดูรายการ)</span></h3>${bars(byStatus,'s')}</div>
+      <div class="card"><h3>แยกตามประเภท <span class="muted">(คลิกเพื่อดูรายการ)</span></h3>${bars(byCat,'c')}</div>
+      <div class="card"><h3>คำขอใหม่ 6 เดือนล่าสุด</h3>
+        <div class="cols">${months.map(x=>`<div class="col"><div class="v">${x.n}</div><div class="bar" style="height:${x.n/mmax*100}%"></div><div class="m">${esc(x.label)}</div></div>`).join('')}</div></div>
+      <div class="card"><h3>แยกตามสาขา (สูงสุด 8 อันดับ)</h3>${bars(byBranch)}</div>
+      <div class="card" style="grid-column:1/-1"><h3>งานค้างที่เก่าที่สุด</h3>
+        ${oldest.length ? `<ul class="oldl">${oldest.map(t=>`<li data-id="${t.id}"><span><b class="tno">${esc(t.ticket_no)}</b> ${catBadge(t.category)} ${esc(t.equipment_name)}<span class="muted"> · ${esc(t.reporter_name)}${t.branch?' / '+esc(t.branch):''}</span></span><span style="white-space:nowrap">${badge(t.status)} <span class="muted">ค้าง ${Math.max(0,Math.floor((now-new Date(t.created_at))/DAY))} วัน</span></span></li>`).join('')}</ul>` : '<p class="muted" style="margin:0">ไม่มีงานค้าง 🎉</p>'}
+      </div>
+    </div>`;
+    $$('#dash .hb[data-s]').forEach(el=>el.onclick=()=>{ listState = {q:'',status:el.dataset.s,cat:''}; location.hash='#/list'; });
+    $$('#dash .hb[data-c]').forEach(el=>el.onclick=()=>{ listState = {q:'',status:'',cat:el.dataset.c}; location.hash='#/list'; });
+    $$('#dash .oldl li').forEach(el=>el.onclick=()=>location.hash='#/t/'+el.dataset.id);
+  };
+
+  m.innerHTML = `
+  <div class="head"><div><h1>Dashboard</h1><p class="sub" style="margin:0">ภาพรวมงานแจ้งซ่อมทั้งระบบ</p></div>
+    <div class="actions">
+      <select id="dp" style="margin:0;width:auto"><option value="all">ทั้งหมด</option><option value="30">30 วันล่าสุด</option><option value="90">90 วันล่าสุด</option><option value="year">ปีนี้</option></select>
+      <button class="btn" id="dExport">⬇ Export Excel (ทั้งหมด)</button>
+    </div></div>
+  <div id="dash"></div>`;
+  $('#dp').value = dashPeriod;
+  $('#dp').onchange = e=>{ dashPeriod = e.target.value; draw(); };
+  $('#dExport').onclick = ()=>exportExcel(null);
+  draw();
 }
 
 /* =====================================================================
